@@ -25,6 +25,7 @@ import argparse
 import pandas as pd
 import numpy as np
 from scipy.stats import norm
+import matplotlib.pyplot as plt
 
 # ------------------------------
 # Parse command-line arguments
@@ -61,6 +62,20 @@ def black_scholes_put_price(S, K, T, r, sigma):
     d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
     d2 = d1 - sigma * np.sqrt(T)
     return K * np.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+
+
+def plot_pnl(capital_track, start_date='2010-01-01'):
+    """Plot PnL over time using capital_track values."""
+    dates = pd.date_range(start=start_date, periods=len(capital_track), freq='W-FRI')
+    plt.figure(figsize=(12, 6))
+    plt.plot(dates, capital_track, label='Capital / PnL')
+    plt.title('PnL Over Time')
+    plt.xlabel('Date')
+    plt.ylabel('Capital ($)')
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
 
 # ------------------------------
 # Strategy Execution
@@ -123,6 +138,8 @@ ann_return = (capital_track[-1] / initial_capital) ** (52 / len(capital_track)) 
 sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(52)
 max_drawdown = (pd.Series(capital_track).cummax() - pd.Series(capital_track)).div(pd.Series(capital_track).cummax()).max()
 expected_pnl = initial_capital * ann_return
+
+plot_pnl(capital_track, start_date=weekly_df.index[0].strftime('%Y-%m-%d'))
 
 summary = pd.DataFrame([{
     "Annual Return (%)": round(ann_return * 100, 2),
