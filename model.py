@@ -32,10 +32,14 @@ import matplotlib.pyplot as plt
 # ------------------------------
 parser = argparse.ArgumentParser(description="VXX Covered Call Strategy")
 parser.add_argument('--exposure', type=float, default=0.05, help='Fractional capital exposure per position (e.g. 0.02 for 2%)')
+parser.add_argument('--exposure_2', type=float, default=0.15, help='Fractional capital exposure per position (e.g. 0.02 for 2%) in the high VIX regime')
 parser.add_argument('--disable_ema_filter', action='store_true', help='Disable SPY EMA 20/80 filter for call selling')
+parser.add_argument('--vix_spike_threshold', type=float, default=0.30, help='VIX 2-day cumulative spike threshold to trigger high-exposure regime (e.g. 0.3 for 30%)')
 args = parser.parse_args()
 exposure_pct = args.exposure
+exposure_pct_2 = args.exposure_2
 disable_ema_filter = args.disable_ema_filter
+vix_spike_threshold = args.vix_spike_threshold
 
 # ------------------------------
 # Load and prepare data
@@ -49,10 +53,18 @@ df['EMA_20'] = df['SPY'].ewm(span=20, adjust=False).mean()
 df['EMA_80'] = df['SPY'].ewm(span=80, adjust=False).mean()
 df['EMA_signal'] = df['EMA_20'] > df['EMA_80']
 
+# Compute 2-day cumulative VIX return
+df['VIX_2d_cum_return'] = df['VIX'] / df['VIX'].shift(2) - 1
+
+# Flag high-volatility regime based on user-defined threshold
+df['Spike_2d'] = df['VIX_2d_cum_return'] > vix_spike_threshold
+df['High_Regime'] = df['Spike_2d']
+
 # Aggregate weekly
 weekly_df = df[['VIX', 'VXX', 'EMA_signal']].resample('W-FRI').last()
 weekly_df['VXX_return'] = weekly_df['VXX'].pct_change()
 weekly_df['VXX_vol'] = weekly_df['VXX_return'].rolling(window=4).std() * np.sqrt(52)
+weekly_df['High_Exposure_Regime'] = df['High_Regime'].resample('W-FRI').max().fillna(0).astype(bool)
 if disable_ema_filter:
     weekly_df['EMA_signal'] = True
 
@@ -112,7 +124,9 @@ for i in range(len(weekly_df)):
         capital_track.append(capital)
         continue
 
-    position_value = exposure_pct * capital
+    exposure_limit = exposure_pct_2 if row['High_Exposure_Regime'] else exposure_pct
+    position_value = exposure_limit * capital
+
     position_size = position_value / vxx_price
     idle_cash = capital - (position_value if not short_active else 0)
     capital += idle_cash * t_bill_weekly
