@@ -1,18 +1,38 @@
-# Strategy: 2% max exposure, sell ATM VXX calls weekly
-# If assigned → short VXX → wait until VXX ≤ entry price → then sell ATM put to cover
-# Also add 4.5% T-bill yield on idle cash
+# Reload the uploaded CSV file and prepare the data
+import pandas as pd
+import numpy as np
+from scipy.stats import norm
 
-# Initialize
+# Load file
+df = pd.read_csv("./daily_data.csv")
+df['Date'] = pd.to_datetime(df['Date'])
+df.set_index('Date', inplace=True)
+
+# Weekly resample
+weekly_df = df[['VIX', 'VXX']].resample('W-FRI').last()
+weekly_df['VXX_return'] = weekly_df['VXX'].pct_change()
+weekly_df['VXX_vol'] = weekly_df['VXX_return'].rolling(window=4).std() * np.sqrt(52)
+
+# Define Black-Scholes call pricing
+def black_scholes_call_price(S, K, T, r, sigma):
+    if S <= 0 or K <= 0 or T <= 0 or sigma <= 0:
+        return 0.0
+    d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    return S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
+
+# Strategy logic
 capital = 350_000
 initial_capital = capital
-capital_track_assigned_puts = []
+capital_track = []
 short_active = False
 short_price = 0
 short_position = 0
 short_pnl = 0
 peak_capital = capital
 T_weekly = 1 / 52
-t_bill_weekly = (1 + 0.045) ** (1 / 52) - 1  # Weekly interest on idle cash
+r = 0.01
+t_bill_weekly = (1 + 0.045) ** (1 / 52) - 1
 
 for i in range(len(weekly_df)):
     row = weekly_df.iloc[i]
@@ -20,21 +40,18 @@ for i in range(len(weekly_df)):
     vxx_vol = row['VXX_vol']
 
     if np.isnan(vxx_price) or np.isnan(vxx_vol) or vxx_price <= 0 or vxx_vol <= 0:
-        capital_track_assigned_puts.append(capital)
+        capital_track.append(capital)
         continue
 
-    # Determine position size (2% of capital)
     position_value = 0.02 * capital
     position_size = position_value / vxx_price
     idle_cash = capital - (position_value if not short_active else 0)
     capital += idle_cash * t_bill_weekly
 
     if not short_active:
-        # Sell ATM call
         call_premium = black_scholes_call_price(vxx_price, vxx_price, T_weekly, r, vxx_vol)
         capital += call_premium * position_size
 
-        # Check assignment
         if i + 1 < len(weekly_df):
             next_price = weekly_df.iloc[i + 1]['VXX']
             if next_price > vxx_price:
@@ -46,7 +63,6 @@ for i in range(len(weekly_df)):
         short_pnl = (short_price - current_price) * short_position
 
         if current_price <= short_price:
-            # VXX has reverted — sell ATM put to cover
             put_premium = black_scholes_call_price(current_price, current_price, T_weekly, r, vxx_vol)
             capital += put_premium * short_position
             short_active = False
@@ -54,13 +70,18 @@ for i in range(len(weekly_df)):
 
     capital_with_pnl = capital + short_pnl
     peak_capital = max(peak_capital, capital_with_pnl)
-    capital_track_assigned_puts.append(capital_with_pnl)
+    capital_track.append(capital_with_pnl)
 
 # Performance metrics
-returns_assigned_puts = pd.Series(np.diff(capital_track_assigned_puts, prepend=initial_capital)) / initial_capital
-ann_return_assigned_puts = (capital_track_assigned_puts[-1] / initial_capital) ** (52 / len(capital_track_assigned_puts)) - 1
-sharpe_assigned_puts = (returns_assigned_puts.mean() / returns_assigned_puts.std()) * np.sqrt(52)
-max_dd_assigned_puts = (pd.Series(capital_track_assigned_puts).cummax() - pd.Series(capital_track_assigned_puts)).div(pd.Series(capital_track_assigned_puts).cummax()).max()
+returns = pd.Series(np.diff(capital_track, prepend=initial_capital)) / initial_capital
+ann_return = (capital_track[-1] / initial_capital) ** (52 / len(capital_track)) - 1
+sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(52)
+max_drawdown = (pd.Series(capital_track).cummax() - pd.Series(capital_track)).div(pd.Series(capital_track).cummax()).max()
 
-ann_return_assigned_puts, sharpe_assigned_puts, max_dd_assigned_puts
+summary = pd.DataFrame([{
+    "Annual Return (%)": round(ann_return * 100, 2),
+    "Sharpe Ratio": round(sharpe_ratio, 2),
+    "Max Drawdown (%)": round(max_drawdown * 100, 2)
+}])
 
+print(summary.to_string(index=False))
