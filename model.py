@@ -1,3 +1,26 @@
+'''
+1. **Sell ATM Weekly Calls on VXX**:
+   - I sell at-the-money VXX call options every week.
+   - Position size is determined by current VIX level:
+     - VIX < LOW → allocate X% of capital
+     - VIX between LOW and HIGH → allocate Y%
+     - VIX > HIGH → allocate Z%
+   - Option premium is modeled using the Black-Scholes formula, with volatility estimated from VXX historical returns.
+
+2. **Assignment Handling**:
+   - If VXX rises and the call finishes ITM, I am assigned and become **short VXX**.
+   - I do **not cover the short immediately**.
+
+3. **Covering the Short**:
+   - I wait until VXX falls back to or below my original short price.
+   - At that point, I sell an **ATM VXX put** with size equal to my short position.
+   - If the put is exercised, it covers my short.
+
+4. **No Forced Covering**:
+   - If VXX remains above my short price, I do **nothing** and wait it out.
+   - The position is collateralized and I avoid taking realized losses by never covering high.
+'''
+
 import argparse
 import pandas as pd
 import numpy as np
