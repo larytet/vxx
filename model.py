@@ -1,19 +1,30 @@
-# Reload the uploaded CSV file and prepare the data
+import argparse
 import pandas as pd
 import numpy as np
 from scipy.stats import norm
 
-# Load file
+# ------------------------------
+# Parse command-line arguments
+# ------------------------------
+parser = argparse.ArgumentParser(description="VXX Covered Call Strategy")
+parser.add_argument('--exposure', type=float, default=0.02, help='Fractional capital exposure per position (e.g. 0.02 for 2%)')
+args = parser.parse_args()
+exposure_pct = args.exposure
+
+# ------------------------------
+# Load and prepare data
+# ------------------------------
 df = pd.read_csv("./daily_data.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df.set_index('Date', inplace=True)
 
-# Weekly resample
 weekly_df = df[['VIX', 'VXX']].resample('W-FRI').last()
 weekly_df['VXX_return'] = weekly_df['VXX'].pct_change()
 weekly_df['VXX_vol'] = weekly_df['VXX_return'].rolling(window=4).std() * np.sqrt(52)
 
-# Define Black-Scholes call pricing
+# ------------------------------
+# Black-Scholes pricing function
+# ------------------------------
 def black_scholes_call_price(S, K, T, r, sigma):
     if S <= 0 or K <= 0 or T <= 0 or sigma <= 0:
         return 0.0
@@ -21,7 +32,9 @@ def black_scholes_call_price(S, K, T, r, sigma):
     d2 = d1 - sigma * np.sqrt(T)
     return S * norm.cdf(d1) - K * np.exp(-r * T) * norm.cdf(d2)
 
-# Strategy logic
+# ------------------------------
+# Strategy Execution
+# ------------------------------
 capital = 350_000
 initial_capital = capital
 capital_track = []
@@ -43,7 +56,7 @@ for i in range(len(weekly_df)):
         capital_track.append(capital)
         continue
 
-    position_value = 0.02 * capital
+    position_value = exposure_pct * capital
     position_size = position_value / vxx_price
     idle_cash = capital - (position_value if not short_active else 0)
     capital += idle_cash * t_bill_weekly
@@ -72,7 +85,9 @@ for i in range(len(weekly_df)):
     peak_capital = max(peak_capital, capital_with_pnl)
     capital_track.append(capital_with_pnl)
 
-# Performance metrics
+# ------------------------------
+# Performance Metrics
+# ------------------------------
 returns = pd.Series(np.diff(capital_track, prepend=initial_capital)) / initial_capital
 ann_return = (capital_track[-1] / initial_capital) ** (52 / len(capital_track)) - 1
 sharpe_ratio = (returns.mean() / returns.std()) * np.sqrt(52)
