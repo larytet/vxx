@@ -73,22 +73,26 @@ def extract_yahoo_table(file_path):
                 df.set_index('Date', inplace=True)
                 df['Close'] = pd.to_numeric(df[close_col], errors='coerce')
                 return df[['Close']].dropna()
-    raise ValueError("No suitable table with Date and Close columns found.")
+    raise ValueError(f"No suitable table with Date and Close columns found in {file_path}")
 
-# Extract as daily data (no resample)
-vix_df = extract_yahoo_table("VIX_file.html")
-vxx_df = extract_yahoo_table("VXX_file.html")
+# Define file-to-column mapping
+files = {
+    "VIX_file.html": "VIX",
+    "VXX_file.html": "VXX",
+    "SPY_file.html": "SPY"
+}
 
-# Rename columns
-vix_df.rename(columns={'Close': 'VIX'}, inplace=True)
-vxx_df.rename(columns={'Close': 'VXX'}, inplace=True)
+# Extract and rename
+dataframes = {}
+for file, col_name in files.items():
+    df = extract_yahoo_table(file)
+    df.rename(columns={'Close': col_name}, inplace=True)
+    dataframes[col_name] = df
 
-# Merge daily data on Date
-daily_data = pd.merge(vix_df, vxx_df, left_index=True, right_index=True, how='outer').sort_index()
-daily_data = daily_data.dropna()
+# Merge all dataframes on the index (Date)
+daily_data = pd.concat(dataframes.values(), axis=1).dropna().sort_index()
 
-# Optional preview
+# Optional preview and save
 print(daily_data)
 daily_data.to_csv("daily_data.csv")
 print(f"Saved {len(daily_data)} rows to 'daily_data.csv'")
-
