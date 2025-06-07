@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 # Parse command-line arguments
 # ------------------------------
 parser = argparse.ArgumentParser(description="VXX Covered Call Strategy")
-parser.add_argument('--exposure', type=float, default=0.02, help='Fractional capital exposure per position (e.g. 0.02 for 2%)')
+parser.add_argument('--exposure', type=float, default=0.10, help='Fractional capital exposure per position (e.g. 0.02 for 2%)')
 parser.add_argument('--disable_ema_filter', action='store_true', help='Disable SPY EMA 20/80 filter for call selling')
 args = parser.parse_args()
 exposure_pct = args.exposure
