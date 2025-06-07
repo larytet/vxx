@@ -32,8 +32,10 @@ import matplotlib.pyplot as plt
 # ------------------------------
 parser = argparse.ArgumentParser(description="VXX Covered Call Strategy")
 parser.add_argument('--exposure', type=float, default=0.02, help='Fractional capital exposure per position (e.g. 0.02 for 2%)')
+parser.add_argument('--disable_ema_filter', action='store_true', help='Disable SPY EMA 20/80 filter for call selling')
 args = parser.parse_args()
 exposure_pct = args.exposure
+disable_ema_filter = args.disable_ema_filter
 
 # ------------------------------
 # Load and prepare data
@@ -51,6 +53,8 @@ df['EMA_signal'] = df['EMA_20'] > df['EMA_80']
 weekly_df = df[['VIX', 'VXX', 'EMA_signal']].resample('W-FRI').last()
 weekly_df['VXX_return'] = weekly_df['VXX'].pct_change()
 weekly_df['VXX_vol'] = weekly_df['VXX_return'].rolling(window=4).std() * np.sqrt(52)
+if disable_ema_filter:
+    weekly_df['EMA_signal'] = True
 
 # ------------------------------
 # Black-Scholes pricing function
