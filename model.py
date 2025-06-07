@@ -42,7 +42,13 @@ df = pd.read_csv("./daily_data.csv")
 df['Date'] = pd.to_datetime(df['Date'])
 df.set_index('Date', inplace=True)
 
-weekly_df = df[['VIX', 'VXX']].resample('W-FRI').last()
+# Calculate SPY EMA 20 and EMA 80
+df['EMA_20'] = df['SPY'].ewm(span=20, adjust=False).mean()
+df['EMA_80'] = df['SPY'].ewm(span=80, adjust=False).mean()
+df['EMA_signal'] = df['EMA_20'] > df['EMA_80']
+
+# Aggregate weekly
+weekly_df = df[['VIX', 'VXX', 'EMA_signal']].resample('W-FRI').last()
 weekly_df['VXX_return'] = weekly_df['VXX'].pct_change()
 weekly_df['VXX_vol'] = weekly_df['VXX_return'].rolling(window=4).std() * np.sqrt(52)
 
@@ -96,8 +102,9 @@ for i in range(len(weekly_df)):
     row = weekly_df.iloc[i]
     vxx_price = row['VXX']
     vxx_vol = row['VXX_vol']
+    allow_trade = row['EMA_signal']
 
-    if np.isnan(vxx_price) or np.isnan(vxx_vol) or vxx_price <= 0 or vxx_vol <= 0:
+    if np.isnan(vxx_price) or np.isnan(vxx_vol) or not allow_trade or vxx_price <= 0 or vxx_vol <= 0:
         capital_track.append(capital)
         continue
 
