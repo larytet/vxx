@@ -156,7 +156,10 @@ summary = pd.DataFrame([{
     "Annual Return (%)": round(ann_return * 100, 2),
     "Sharpe Ratio": round(sharpe_ratio, 2),
     "Max Drawdown (%)": round(max_drawdown * 100, 2),
-    "Annualized Expected PnL ($)": round(expected_pnl, 2)
+    "Annualized Expected PnL ($)": round(expected_pnl, 2),
+    "Short Active": short_active,
+    "Short Entry Price": round(short_price, 2) if short_active else None,
+    "Short Position Size": round(short_position, 2) if short_active else None
 }])
 
 print(summary.to_string(index=False))
