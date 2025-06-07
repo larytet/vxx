@@ -34,7 +34,7 @@ parser = argparse.ArgumentParser(description="VXX Covered Call Strategy")
 parser.add_argument('--exposure', type=float, default=0.05, help='Fractional capital exposure per position (e.g. 0.02 for 2%)')
 parser.add_argument('--exposure_2', type=float, default=0.15, help='Fractional capital exposure per position (e.g. 0.02 for 2%) in the high VIX regime')
 parser.add_argument('--disable_ema_filter', action='store_true', help='Disable SPY EMA 20/80 filter for call selling')
-parser.add_argument('--vix_spike_threshold', type=float, default=0.30, help='VIX 2-day cumulative spike threshold to trigger high-exposure regime (e.g. 0.3 for 30%)')
+parser.add_argument('--vix_spike_threshold', type=float, default=0.10, help='VIX 2-day cumulative spike threshold to trigger high-exposure regime (e.g. 0.3 for 30%)')
 args = parser.parse_args()
 exposure_pct = args.exposure
 exposure_pct_2 = args.exposure_2
@@ -60,11 +60,18 @@ df['VIX_2d_cum_return'] = df['VIX'] / df['VIX'].shift(2) - 1
 df['Spike_2d'] = df['VIX_2d_cum_return'] > vix_spike_threshold
 df['High_Regime'] = df['Spike_2d']
 
+# Compute daily returns and 15-day rolling volatility (annualized)
+df['VXX_return'] = df['VXX'].pct_change()
+df['VXX_vol_daily_15d'] = df['VXX_return'].rolling(window=15).std() * np.sqrt(252)
+
 # Aggregate weekly
 weekly_df = df[['VIX', 'VXX', 'EMA_signal']].resample('W-FRI').last()
 weekly_df['VXX_return'] = weekly_df['VXX'].pct_change()
-weekly_df['VXX_vol'] = weekly_df['VXX_return'].rolling(window=4).std() * np.sqrt(52)
+# Forward-fill regime flags for the rest of the week
+df['High_Regime_FF'] = df['High_Regime'].replace(False, np.nan).ffill(limit=4).fillna(False)
 weekly_df['High_Exposure_Regime'] = df['High_Regime'].resample('W-FRI').max().fillna(0).astype(bool)
+# Aggregate vol weekly
+weekly_df['VXX_vol'] = df['VXX_vol_daily_15d'].resample('W-FRI').last()
 if disable_ema_filter:
     weekly_df['EMA_signal'] = True
 
